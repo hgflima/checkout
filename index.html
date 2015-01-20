@@ -1,0 +1,1640 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>Integração com a API Mundi Checkout</title>
+
+    <link href="stylesheets/screen.css" rel="stylesheet" type="text/css" media="screen" />
+    <link href="stylesheets/print.css" rel="stylesheet" type="text/css" media="print" />
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+      <script src="javascripts/all.js" type="text/javascript"></script>
+
+  </head>
+
+  <body class="index">
+    <a href="#" id="nav-button">
+      <span>
+        NAV
+        <img src="images/navbar.png" />
+      </span>
+    </a>
+    <div class="tocify-wrapper">
+      <img src="images/logo.png" />
+        <div class="search">
+          <input type="text" class="search" id="input-search" placeholder="Search">
+        </div>
+        <ul class="search-results"></ul>
+      <div id="toc">
+      </div>
+    </div>
+    <div class="page-wrapper">
+      <div class="dark-box"></div>
+      <div class="content">
+        <h1 id='introduo'>Introdução</h1>
+<p>A API Mundi Checkout é a forma mais simples e rápida para realizar a integração com os meios de pagamento oferecidos pela MundiPagg. O produto é um solução completa que inclui um formulário onde é possível inserir dados de cartão de crédito e realizar o pagamento sem que a loja tenha acesso aos dados do cartão do portador.</p>
+
+<p>O processo de integração com o Checkout consiste em 3 passos:</p>
+
+<ol>
+<li>Criar um token único para realizar a transação;</li>
+<li>Adicionar o script na página de checkout para exibir um formulário; onde o portador irá inserir os dados do meio de pagamento desejado;</li>
+<li>Implementar o recebimento da confirmação do pagamento;</li>
+</ol>
+
+<p>Assim que o script de integração for adicionado à página da loja, o formulário será criado automaticamente, simplificando o processo de integração. As imagens abaixo fazem um preview de como ficará o visual do processo de checkout:</p>
+<h2 id='boto-de-pagamento'>Botão de pagamento</h2>
+<p>O botão de pagamento é o primeiro contato do cliente com o fluxo de checkout. É através da ação de clique do cliente que o restante do fluxo acontecerá.</p>
+
+<p><img alt="Botão de pagamento" src="images/payment-button.png" /></p>
+<h2 id='seleo-da-forma-de-pagamento'>Seleção da forma de pagamento</h2>
+<p>Assim que o cliente clicar no botão de pagamento, uma tela se abrirá solicitando a escolha da forma de pagamento - cartão, boleto, transferência online.</p>
+
+<p><img alt="Seleção da forma de pagamento" src="images/payment-selection.png" /></p>
+<h2 id='dados-do-pagamento'>Dados do pagamento</h2>
+<p>Uma vez selecionada a forma de pagamento, uma nova tela se abrirá para que o cliente informe os dados referentes à forma de pagamento escolhida.</p>
+
+<p><img alt="dados do pagamento" src="images/payment-data.png" /></p>
+<h1 id='integrao'>Integração</h1>
+<p>O primeiro passo para se integrar com a API Mundi Checkout é a geração de um token único para a realização da transação. Esse passo é feito no backend da loja, utilizando um script que fará uma requisição ao serviço Mundipagg solicitando o token.</p>
+
+<p>Como o token tem validade de 30 minutos, é importante que ele seja gerado na página de checkout da loja, quando o cliente já decidiu efetuar a compra. Caso tenha se passado mais do que 30 minutos desde a geração do token, ele expirará e a loja precisará gerar um novo token. Outros pontos também devem ser observados ao gerar o token:</p>
+
+<ol>
+<li>A solicitação do token deve ser realizada pela página de checkout da loja, página onde o cliente concluir todo o processo de carrinho de compra;</li>
+<li>Um novo token deve ser gerado a cada visualização desta página pelo cliente;</li>
+<li>A identificação do pedido na loja deve ser único e enviado na solicitação de criação do token, campo OrderReference;</li>
+<li>Caso a loja efetue a requisição de criação de um token e informe um número de pedido já existente retornaremos o mesmo token criado na primeira solicitação e o valor será atualizado para o novo valor enviado no campo AmountInCents;</li>
+<li>O token retonado pela API deverá ser configurado na tag script descrita na próxima seção;</li>
+</ol>
+
+<p>A API utiliza uma arquitetura REST e a troca de mensagens é feita através do protocolo HTTP. As mensagens deverão ser enviadas para o endpoint <code class="prettyprint">http://checkout.mundipagg.com/{recurso}</code> utilizando o recurso <code class="prettyprint">Checkout</code> para geração do token ou o recurso <code class="prettyprint">Query</code> para efetuar consultas aos dados do pedido e de suas respectivas transações</p>
+<h2 id='gerando-o-token'>Gerando o token</h2>
+<p>A criação da requisição REST deve seguir as seguintes regras:</p>
+
+<ol>
+<li>A requisição a ser enviada deve possuir o campo <code class="prettyprint">MerchantKey</code> (chave da loja) no header da requisição.</li>
+<li>O objeto <code class="prettyprint">TokenRequest</code> deve ser enviado no corpo da requisição.</li>
+</ol>
+<h3 id='requisio'>Requisição</h3>
+<blockquote>
+<p>Você deve incluir o header MerchantKey com a sua chave para gerar um token.</p>
+</blockquote>
+<pre><code class="highlight shell">curl --include <span class="se">\</span>
+     --request POST <span class="se">\</span>
+     --header <span class="s2">"Content-Type: application/json"</span> <span class="se">\</span>
+     --header <span class="s2">"MerchantKey: </span><span class="se">\"</span><span class="s2">54409272-781D-4470-BFA3-C58A5A005B49</span><span class="se">\"</span><span class="s2">"</span> <span class="se">\</span>
+     --data-binary <span class="s1">'{
+    "Order": {
+        "AmountInCents": 20000,
+        "BoletoExpirationDate": "2014-12-25T16:20:50",
+        "OrderReference": "AX83673",
+        "SessionId": "2X3CDFF456VGVBH7"
+    },
+    "Options": {
+        "IsAntiFraudEnabled": true,
+        "IsBoletoPaymentEnabled": true,
+        "IsCreditCardPaymentEnabled": true
+    },
+    "OrderCreditCardBrand": {
+        "OrderCreditCardBrandItemCollection": [
+            {
+                "Installment": 10,
+                "IsInstallmentEnabled": true,
+                "Name": "Visa"
+            },
+            {
+                "Installment": 5,
+                "IsInstallmentEnabled": true,
+                "Name": "MasterCard"
+            }
+        ]
+    },
+    "Boleto": {
+        "BoletoExpirationDate": "2015-01-05T21:58:57",
+        "DocumentNumber": "323233323",
+        "Instructions": "Pagar em 10 dias"
+    },
+    "ShoppingCart": {
+        "DeliveryDeadline": "2014-12-25T14:20:50",
+        "EstimatedDeliveryDate": "2014-12-25T14:20:50",
+        "FreightCostInCents": 6789,
+        "ShippingCompany": "XYZ Transportador",
+        "ShoppingCartItemCollection": [
+            {
+                "Description": "Descrição do Produto",
+                "DiscountAmountInCents": 0,
+                "ItemReference": "A2B3B4",
+                "Name": "Nome do Produto",
+                "Quantity": 10,
+                "TotalCostInCents": 20000,
+                "UnitCostInCents": 2000
+            }
+        ]
+    },
+    "Buyer": {
+        "BuyerReference": "HGX1221233",
+        "DocumentNumber": "12345678901234",
+        "DocumentType": "CPF",
+        "Email": "comprador@teste.com",
+        "Gender": "M",
+        "IpAddress": "192.168.0.1",
+        "Name": "Stephen Hawking",
+        "PersonType": "Person",
+        "Phone": "(11) 3073-0404",
+        "BirthDate": "1990-12-26T21:58:57",
+        "BuyerAddressCollection": [
+            {
+                "AddressType": "Shipping",
+                "City": "Rio de Janeiro",
+                "Complement": "2 Andar",
+                "Country": "Brazil",
+                "District": "Urca",
+                "Number": "520",
+                "State": "RJ",
+                "Street": "Avenida Pasteur",
+                "ZipCode": "04719-001"
+            },
+            {
+                "AddressType": "Billing",
+                "City": "Rio de Janeiro",
+                "Complement": "2 Andar",
+                "Country": "Brazil",
+                "District": "Urca",
+                "Number": "520",
+                "State": "RJ",
+                "Street": "Avenida Pasteur",
+                "ZipCode": "04719-001"
+            }
+        ],
+    }
+}'</span> <span class="se">\</span>
+     <span class="s1">'http://checkout.mundipagg.com/Checkout'</span>
+</code></pre>
+
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Order</td>
+<td><a href="#order">Order</a></td>
+<td>Dados do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Options</td>
+<td><a href="#options">Options</a></td>
+<td>Opções do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>OrderCreditCardBrand</td>
+<td><a href="#ordercreditcardbrand">OrderCreditCardBrand</a></td>
+<td>Lista de bandeiras de cartão de crédito e a quantidade de parcelas</td>
+<td>Somente quando a opção de pagamento por cartão de crédito estiver ativa</td>
+</tr>
+<tr>
+<td>ShoppingCart</td>
+<td><a href="#shoppingcart">ShoppingCart</a></td>
+<td>Carrinho de compras</td>
+<td>Somente quando a opção de análise de antifraude no pedido estiver ativa</td>
+</tr>
+<tr>
+<td>Buyer</td>
+<td><a href="#buyer">Buyer</a></td>
+<td>Dados do comprador</td>
+<td>Somente quando a opção de análise de antifraude no pedido estiver ativa</td>
+</tr>
+</tbody></table>
+<h4 id='order'>Order</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AmountInCents</td>
+<td>long</td>
+<td>Valor da transação em centavos</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BoletoExpirationDate</td>
+<td>Date</td>
+<td>Data da expiração do boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>OrderReference</td>
+<td>String</td>
+<td>Identificador do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>SessionId</td>
+<td>String</td>
+<td>Identificador da sessão</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='options'>Options</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>IsAntiFraudEnabled</td>
+<td>Boolean</td>
+<td>Habilita a análise de antifraude no pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>IsBoletoPaymentEnabled</td>
+<td>Boolean</td>
+<td>Habilita o meio de pagamento por boleto bancário</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>IsCreditCardPaymentEnabled</td>
+<td>Boolean</td>
+<td>Habilita o meio de pagamento por cartão de crédito</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='ordercreditcardbrand'>OrderCreditCardBrand</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><a href="#ordercreditcardbranditemcollection">OrderCreditCardBrandItemCollection</a></td>
+<td>Coleção</td>
+<td>Coleção de bandeiras de cartão de crédito</td>
+<td>Somente quando a opção de pagamento por cartão de crédito estiver ativa</td>
+</tr>
+</tbody></table>
+<h4 id='ordercreditcardbranditemcollection'>OrderCreditCardBrandItemCollection</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Installment</td>
+<td>Int</td>
+<td>Número de parcelas para o pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>IsInstallmentEnabled</td>
+<td>Boolean</td>
+<td>Habilita o parcelamento do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>String</td>
+<td>Nome da bandeira de cartão de crédito</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='boleto'>Boleto</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>BoletoExpirationDate</td>
+<td>Data</td>
+<td>Data de expiração do boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentNumber</td>
+<td>String</td>
+<td>Identificador do boleto</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Instructions</td>
+<td>String</td>
+<td>Instruções do boleto</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='shoppingcart'>ShoppingCart</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>DeliveryDeadline</td>
+<td>Data</td>
+<td>Data limite para entrega</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>EstimatedDeliveryDate</td>
+<td>Data</td>
+<td>Data estimada para entrega</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>FreightCostInCents</td>
+<td>Int</td>
+<td>Custo total do frete</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>ShippingCompany</td>
+<td>String</td>
+<td>Transportadora responsável pela entrega</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>ShoppingCartItemCollection</td>
+<td>Coleção</td>
+<td>Lista de <a href="#shoppingcartitem">ShoppingCartItem</a> com os itens do carrinho de compra.</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='shoppingcartitem'>ShoppingCartItem</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Description</td>
+<td>String</td>
+<td>Descrição do produto</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>DiscountAmountInCents</td>
+<td>Int</td>
+<td>Valor total do desconto em centavos</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ItemReference</td>
+<td>String</td>
+<td>Referência do produto no sistema da loja</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>String</td>
+<td>Nome do produto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Quantity</td>
+<td>Int</td>
+<td>Quantidade</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>TotalCostInCents</td>
+<td>Int</td>
+<td>Valor total</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>UnitCostInCents</td>
+<td>Int</td>
+<td>Valor unitário</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='buyer'>Buyer</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>BuyerReference</td>
+<td>String</td>
+<td>Referência do comprador no sistema da loja</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentNumber</td>
+<td>String</td>
+<td>Número do documento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentType</td>
+<td>String</td>
+<td>Tipo do documento (CPF ou CNPJ )</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>String</td>
+<td>E-mail do comprador</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Gender</td>
+<td>String</td>
+<td>Sexo (M para masculino e F para feminino)</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>IpAddress</td>
+<td>String</td>
+<td>Endereço IP do comprador</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>String</td>
+<td>Nome</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>PersonType</td>
+<td>String</td>
+<td>Tipo de pessoa (<strong>person</strong> para pessoa física e <strong>company</strong> para pessoa jurídica)</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Phone</td>
+<td>String</td>
+<td>Número do telefone</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BirthDate</td>
+<td>Data</td>
+<td>Data de nascimento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BuyerAddressCollection</td>
+<td>Coleção</td>
+<td>Coleção de <a href="#buyeraddress">BuyerAddress</a> com ao menos um endereço do comprador.</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='buyeraddress'>BuyerAddress</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>City</td>
+<td>String</td>
+<td>Cidade</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Complement</td>
+<td>String</td>
+<td>Complemento</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Country</td>
+<td>String</td>
+<td>País</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>District</td>
+<td>String</td>
+<td>Bairro</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Number</td>
+<td>String</td>
+<td>Número</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>State</td>
+<td>String</td>
+<td>Estado</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Street</td>
+<td>String</td>
+<td>Logradouro</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ZipCode</td>
+<td>String</td>
+<td>CEP</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AddressType</td>
+<td>String</td>
+<td>Tipo do endereço (<strong>Billing</strong> para endereço de cobrança, <strong>Shipping</strong> para endereço de entrega, <strong>Residential</strong> para endereço residencial e <strong>Comercial</strong> para endereço comercial.</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h3 id='resposta'>Resposta</h3>
+<blockquote>
+<p>Em caso de sucesso, HasError será false e TokenKey conterá o token da sessão</p>
+</blockquote>
+<pre><code class="highlight shell">201 <span class="o">(</span>Created<span class="o">)</span>
+Content-Type: application/json
+<span class="o">{</span>
+    <span class="s2">"ErrorCollection"</span>: <span class="o">[]</span>,
+    <span class="s2">"HasError"</span>: <span class="nb">false</span>,
+    <span class="s2">"RequestKey"</span>: <span class="s2">"75323255-6ba1-4e92-a19c-fb1e89c9cf2a"</span>,
+    <span class="s2">"Success"</span>: <span class="nb">true</span>,
+    <span class="s2">"TokenKey"</span>: <span class="s2">"ad008abf-7877-4c80-bd0a-21e2cbade216"</span>
+<span class="o">}</span>
+</code></pre>
+
+<blockquote>
+<p>Em caso de erro, HasError será true e ErrorCollection conterá a descrição do erro</p>
+</blockquote>
+<pre><code class="highlight shell">400 <span class="o">(</span>Bad Request<span class="o">)</span>
+Content-Type: application/json
+<span class="o">{</span>
+    <span class="s2">"ErrorCollection"</span>: <span class="o">[</span>
+        <span class="o">{</span>
+            <span class="s2">"ErrorCode"</span>: 400,
+            <span class="s2">"ErrorDescription"</span>: <span class="s2">"The OrderReference field is required."</span>,
+            <span class="s2">"ParameterName"</span>: <span class="s2">"Checkout.DataContract.Request.TokenRequestData.OrderRequest.OrderReference"</span>
+        <span class="o">}</span>
+    <span class="o">]</span>,
+    <span class="s2">"HasError"</span>: <span class="nb">true</span>,
+    <span class="s2">"RequestKey"</span>: null,
+    <span class="s2">"Success"</span>: <span class="nb">false</span>,
+    <span class="s2">"TokenKey"</span>: null
+<span class="o">}</span>
+</code></pre>
+
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+</tr>
+</thead><tbody>
+<tr>
+<td><a href="#errorcollection">ErrorCollection</a></td>
+<td>Coleção</td>
+<td>Coleção com os possíveis erros ocorridos com a requisição</td>
+</tr>
+<tr>
+<td>HasError</td>
+<td>Boolean</td>
+<td>Indica se houve algum erro com a requisição</td>
+</tr>
+<tr>
+<td>RequestKey</td>
+<td>Guid</td>
+<td>Identificador da requisição</td>
+</tr>
+<tr>
+<td>Success</td>
+<td>Boolean</td>
+<td>Indica se a requisição foi bem sucedida</td>
+</tr>
+<tr>
+<td>TokenKey</td>
+<td>Guid</td>
+<td>Token</td>
+</tr>
+</tbody></table>
+<h4 id='errorcollection'>ErrorCollection</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>ErrorCode</td>
+<td>Int</td>
+<td>Código do erro</td>
+</tr>
+<tr>
+<td>ErrorDescription</td>
+<td>String</td>
+<td>Descrição do erro ocorrido</td>
+</tr>
+<tr>
+<td>ParameterName</td>
+<td>String</td>
+<td>Campo da requisição que causou o erro</td>
+</tr>
+</tbody></table>
+<h2 id='adicionando-script-na-pgina-de-checkout'>Adicionando script na página de checkout</h2>
+<p>O Mundi Checkout disponibiliza, através de um Java Script, um formulário para que o usuário final insira os dados do cartão de crédito. Para que o formulário seja exibido a loja deve adicionar o Script abaixo em sua página de checkout.</p>
+
+<p>É importante observar que <a href="#gerando-o-token">o Token retornado pela API do Mundi Checkout</a> deve ser utilizado para preencher a propriedade data-token dinamicamente e, após a criação do Token e o processamento do script, será apresentado ao cliente um botão de pagamento com o texto informado na tag data-payment-button-text.
+A função deste botão de pagamento é carregar o Mundi Checkout sobre a página da loja, onde o cliente deverá seguir o fluxo de pagamento até o frame final de sucesso no processamento da transação de pagamento.</p>
+<pre><code class="highlight html"><span class="nt">&lt;script </span><span class="na">id=</span><span class="s">"boxCheckout"</span>
+        <span class="na">type=</span><span class="s">"text/javascript"</span>
+        <span class="na">src=</span><span class="s">"http://checkout.mundipagg.com/Scripts/Checkout/checkoutFactory.js"</span>
+
+        <span class="na">data-paymentmethod-creditcard=</span><span class="s">"true"</span>
+        <span class="na">data-paymentmethod-boleto=</span><span class="s">"true"</span>
+        <span class="na">data-with-user-data=</span><span class="s">"true"</span>
+        <span class="na">data-color-panel=</span><span class="s">"#3276C5"</span>
+        <span class="na">data-url-logo=</span><span class="s">null</span>
+        <span class="na">data-payment-button-text=</span><span class="s">"Efetuar Pagamento"</span>
+        <span class="na">data-merchant-name=</span><span class="s">"Posto na Web"</span>
+        <span class="na">data-token=</span><span class="s">"TOKEN"</span>
+        <span class="na">data-api-url=</span><span class="s">"http://checkout.mundipagg.com"</span>
+        <span class="na">data-opacity=</span><span class="s">"70"</span><span class="nt">&gt;</span>
+<span class="nt">&lt;/script&gt;</span>
+</code></pre>
+
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>data-paymentmethod-creditcard</td>
+<td>Boolean</td>
+<td>Habilita o pagamento por cartão de crédito</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-paymentmethod-boleto</td>
+<td>Boolean</td>
+<td>Habilita o pagamento por boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-with-user-data</td>
+<td>Boolean</td>
+<td>Habilita o formulário completo com dados de usuário para validação dos dados de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-color-panel</td>
+<td>String</td>
+<td>Define a cor, em hexadecimal #RRGGBB, para renderização dos painéis e formulários do checkout</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-url-logo</td>
+<td>String</td>
+<td>Url do logo tipo da loja</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>data-payment-button-text</td>
+<td>String</td>
+<td>Texto do botão de pagamento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-merchant-name</td>
+<td>String</td>
+<td>Nome da loja a ser apresentado no painel do checkout</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-token</td>
+<td>String</td>
+<td>Token gerado na resposta da requisição de criação do Token</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>data-api-url</td>
+<td>String</td>
+<td>Url da API do MundiCheckout</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>data-opacity</td>
+<td>Int</td>
+<td>Oercentual da opacidade da sombra de fundo do checkout</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h2 id='post-de-notificao'>POST de Notificação</h2>
+<p>Após o processamento da transação pela plataforma um post de notificação será enviado para a loja informando os dados do pedido e de suas transações. Este POST é um XML com as informações básicas da transação e do pedido a qual a transação pertence.</p>
+
+<p><aside class="notice">
+Para que o POST seja enviado, é necessário que a loja disponibilize uma página e informe a URL desta página para a MundiPagg. Qualquer notificação que a MundiPagg precise enviar para a loja será feita através desta URL.
+</aside></p>
+<pre><code class="highlight xml"><span class="nt">&lt;Notification&gt;</span>
+    <span class="nt">&lt;Version&gt;&lt;/Version&gt;</span> 
+    <span class="nt">&lt;Merchant&gt;</span> 
+        <span class="nt">&lt;Name&gt;&lt;/Name&gt;</span>
+        <span class="nt">&lt;MerchantKey&gt;&lt;/MerchantKey&gt;</span>
+        <span class="nt">&lt;MerchantReference&gt;&lt;/MerchantReference&gt;</span>
+    <span class="nt">&lt;/Merchant&gt;</span>
+    <span class="nt">&lt;Token&gt;</span>
+        <span class="nt">&lt;TokenKey&gt;&lt;/TokenKey&gt;</span>
+        <span class="nt">&lt;TokenStatus&gt;&lt;/TokenStatus&gt;</span>
+    <span class="nt">&lt;/Token&gt;</span>
+    <span class="nt">&lt;Order&gt;</span>
+        <span class="nt">&lt;AmountInCents&gt;&lt;/AmountInCents&gt;</span>
+        <span class="nt">&lt;OrderKey&gt;&lt;/OrderKey&gt;</span>
+        <span class="nt">&lt;OrderReference&gt;&lt;/OrderReference&gt;</span>
+        <span class="nt">&lt;ConfirmDate&gt;&lt;/ConfirmDate&gt;</span>
+        <span class="nt">&lt;OrderStatus&gt;&lt;/OrderStatus&gt;</span>
+    <span class="nt">&lt;/Order&gt;</span>
+    <span class="nt">&lt;AntiFraud&gt;</span>
+        <span class="nt">&lt;AntiFraudAnalysisStatus&gt;&lt;/AntiFraudAnalysisStatus&gt;</span>
+        <span class="nt">&lt;AntiFraudServiceName&gt;&lt;/AntiFraudServiceName&gt;</span>
+        <span class="nt">&lt;ReturnCode&gt;&lt;/ReturnCode&gt;</span>
+        <span class="nt">&lt;ReturnStatus&gt;&lt;/ReturnStatus&gt;</span>
+        <span class="nt">&lt;Message&gt;&lt;/Message&gt;</span>
+        <span class="nt">&lt;AnalysisScore&gt;&lt;/AnalysisScore&gt;</span>
+    <span class="nt">&lt;/AntiFraud&gt;</span>
+    <span class="nt">&lt;Payment&gt;</span>
+        <span class="nt">&lt;CreditCardTransactionCollection&gt;</span>
+            <span class="nt">&lt;CreditCardTransaction&gt;</span>
+                <span class="nt">&lt;AmountInCents&gt;&lt;/AmountInCents&gt;</span>
+                <span class="nt">&lt;CreditCardTransactionKey&gt;&lt;/CreditCardTransactionKey&gt;</span>
+                <span class="nt">&lt;CreateDate&gt;&lt;/CreateDate&gt;</span>
+                <span class="nt">&lt;CreditCardTransactionStatus&gt;&lt;/CreditCardTransactionStatus&gt;</span>
+                <span class="nt">&lt;GatewayTransactionKey&gt;&lt;/GatewayTransactionKey&gt;</span>
+                <span class="nt">&lt;Installments&gt;&lt;/Installments&gt;</span>
+                <span class="nt">&lt;CreditCard&gt;</span>
+                    <span class="nt">&lt;MaskedNumber&gt;&lt;/MaskedNumber&gt;</span>
+                    <span class="nt">&lt;Brand&gt;&lt;/Brand&gt;</span>
+                    <span class="nt">&lt;HolderName&gt;&lt;/HolderName&gt;</span>
+                    <span class="nt">&lt;InstantBuyKey&gt;&lt;/InstantBuyKey&gt;</span>
+                <span class="nt">&lt;/CreditCard&gt;</span>
+                <span class="nt">&lt;TransactionDetails&gt;</span>
+                    <span class="nt">&lt;Authorization&gt;</span>
+                        <span class="nt">&lt;AuthorizedAmountInCents&gt;&lt;/AuthorizedAmountInCents&gt;</span>
+                        <span class="nt">&lt;AuthorizationDate&gt;&lt;/AuthorizationDate&gt;</span>
+                        <span class="nt">&lt;AcquirerAuthorizationCode&gt;&lt;/AcquirerAuthorizationCode&gt;</span>
+                        <span class="nt">&lt;AcquirerTransactionIdentifier&gt;&lt;/AcquirerTransactionIdentifier&gt;</span>
+                        <span class="nt">&lt;AcquirerUniqueSequentialNumber&gt;&lt;/AcquirerUniqueSequentialNumber&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnCode&gt;&lt;/AcquirerReturnCode&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnMessage&gt;&lt;/AcquirerReturnMessage&gt;</span>
+                    <span class="nt">&lt;/Authorization&gt;</span>
+                    <span class="nt">&lt;Confirmation&gt;</span>
+                    <span class="nt">&lt;CapturedAmountInCents&gt;&lt;/CapturedAmountInCents&gt;</span>
+                        <span class="nt">&lt;CaptureDate&gt;&lt;/CaptureDate&gt;</span>
+                        <span class="nt">&lt;AcquirerTransactionIdentifier&gt;&lt;/AcquirerTransactionIdentifier&gt;</span>
+                        <span class="nt">&lt;AcquirerUniqueSequentialNumber&gt;&lt;/AcquirerUniqueSequentialNumber&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnCode&gt;&lt;/AcquirerReturnCode&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnMessage&gt;&lt;/AcquirerReturnMessage&gt;</span>
+                    <span class="nt">&lt;/Confirmation&gt;</span>
+                    <span class="nt">&lt;Cancellation&gt;</span>
+                        <span class="nt">&lt;CanceledAmountInCents&gt;&lt;/CanceledAmountInCents&gt;</span>
+                        <span class="nt">&lt;CancellationDate&gt;&lt;/CancellationDate&gt;</span>
+                        <span class="nt">&lt;AcquirerTransactionIdentifier&gt;&lt;/AcquirerTransactionIdentifier&gt;</span>
+                        <span class="nt">&lt;AcquirerUniqueSequentialNumber&gt;&lt;/AcquirerUniqueSequentialNumber&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnCode&gt;&lt;/AcquirerReturnCode&gt;</span>
+                        <span class="nt">&lt;AcquirerReturnMessage&gt;&lt;/AcquirerReturnMessage&gt;</span>
+                    <span class="nt">&lt;/Cancellation&gt;</span>
+                <span class="nt">&lt;/TransactionDetails&gt;</span>
+            <span class="nt">&lt;/CreditCardTransaction&gt;</span>
+        <span class="nt">&lt;/CreditCardTransactionCollection&gt;</span>
+        <span class="nt">&lt;BoletoTransactionCollection&gt;</span>
+            <span class="nt">&lt;BoletoTransaction&gt;</span>
+                <span class="nt">&lt;AmountInCents&gt;&lt;/AmountInCents&gt;</span>
+                <span class="nt">&lt;BoletoTransactionKey&gt;&lt;/BoletoTransactionKey&gt;</span>
+                <span class="nt">&lt;GatewayTransactionKey&gt;&lt;/GatewayTransactionKey&gt;</span>
+                <span class="nt">&lt;CreateDate&gt;&lt;/CreateDate&gt;</span>
+                <span class="nt">&lt;BoletoTransactionStatus&gt;&lt;/BoletoTransactionStatus&gt;</span>
+                <span class="nt">&lt;Boleto&gt;</span>
+                    <span class="nt">&lt;CreateDate&gt;&lt;/CreateDate&gt;</span>
+                    <span class="nt">&lt;DocumentNumber&gt;&lt;/DocumentNumber&gt;</span>
+                    <span class="nt">&lt;NossoNumero&gt;&lt;/NossoNumero&gt;</span>
+                    <span class="nt">&lt;ExpirationDate&gt;&lt;/ExpirationDate&gt;</span>
+                <span class="nt">&lt;/Boleto&gt;</span>
+                <span class="nt">&lt;TransactionDetails&gt;</span>
+                    <span class="nt">&lt;PaidAmountInCents&gt;&lt;/PaidAmountInCents&gt;</span>
+                    <span class="nt">&lt;PaymentDate&gt;&lt;/PaymentDate&gt;</span>
+                    <span class="nt">&lt;BankPaymentDate&gt;&lt;/BankPaymentDate&gt;</span>
+                <span class="nt">&lt;/TransactionDetails&gt;</span>
+            <span class="nt">&lt;/BoletoTransaction&gt;</span>
+        <span class="nt">&lt;/BoletoTransactionCollection&gt;</span>
+    <span class="nt">&lt;/Payment&gt;</span>
+    <span class="nt">&lt;Buyer&gt;</span>
+        <span class="nt">&lt;BuyerKey&gt;&lt;/BuyerKey&gt;</span>
+        <span class="nt">&lt;BuyerReference&gt;&lt;/BuyerReference&gt;</span>
+        <span class="nt">&lt;PersonType&gt;&lt;/PersonType&gt;</span>
+        <span class="nt">&lt;DocumentNumber&gt;&lt;/DocumentNumber&gt;</span>
+        <span class="nt">&lt;DocumentType&gt;&lt;/DocumentType&gt;</span>
+        <span class="nt">&lt;Name&gt;&lt;/Name&gt;</span>
+        <span class="nt">&lt;Gender&gt;&lt;/Gender&gt;</span>
+        <span class="nt">&lt;BirthDate&gt;&lt;/BirthDate&gt;</span>
+        <span class="nt">&lt;Email&gt;&lt;/Email&gt;</span>
+        <span class="nt">&lt;Phone&gt;&lt;/Phone&gt;</span>
+        <span class="nt">&lt;AddressCollection&gt;</span>
+            <span class="nt">&lt;Address&gt;</span>
+                <span class="nt">&lt;Country&gt;&lt;/Country&gt;</span>
+                <span class="nt">&lt;State&gt;&lt;/State&gt;</span>
+                <span class="nt">&lt;City&gt;&lt;/City&gt;</span>
+                <span class="nt">&lt;District&gt;&lt;/District&gt;</span>
+                <span class="nt">&lt;Street&gt;&lt;/Street&gt;</span>
+                <span class="nt">&lt;Number&gt;&lt;/Number&gt;</span>
+                <span class="nt">&lt;Complement&gt;&lt;/Complement&gt;</span>
+                <span class="nt">&lt;ZipCode&gt;&lt;/ZipCode&gt;</span>
+                <span class="nt">&lt;AddressType&gt;&lt;/AddressType&gt;</span>
+            <span class="nt">&lt;/Address&gt;</span>
+        <span class="nt">&lt;/AddressCollection&gt;</span>
+    <span class="nt">&lt;/Buyer&gt;</span>
+<span class="nt">&lt;/Notification&gt;</span>
+</code></pre>
+<h4 id='notification'>Notification</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Buyer</td>
+<td><a href="#buyer">Buyer</a></td>
+<td>Dados do comprador</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Merchant</td>
+<td><a href="#merchant">Merchant</a></td>
+<td>Dados da loja</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Order</td>
+<td><a href="#order">Order</a></td>
+<td>Dados do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AntiFraud</td>
+<td><a href="#antifraud">AntiFraud</a></td>
+<td>Dados do resultado da análise de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Payment</td>
+<td><a href="#payment">Payment</a></td>
+<td>Dados do pagamento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Token</td>
+<td><a href="#token">Token</a></td>
+<td>Dados do Token</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Version</td>
+<td>String</td>
+<td>Versão do serviço de notificação</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='merchant'>Merchant</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>MerchantKey</td>
+<td>Guid</td>
+<td>Chave da loja</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>MerchantReference</td>
+<td>String</td>
+<td>Referência da loja</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>String</td>
+<td>Nome da loja</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='order'>Order</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AmountInCents</td>
+<td>Int</td>
+<td>Valor total do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ConfirmDate</td>
+<td>Data</td>
+<td>Data de confirmação do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>OrderKey</td>
+<td>String</td>
+<td>Chave do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>OrderReference</td>
+<td>String</td>
+<td>Referência do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>OrderStatus</td>
+<td>String</td>
+<td>Status do pedido</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='antifraud'>AntiFraud</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AnalysisScore</td>
+<td>String</td>
+<td>Pontuação de resultado da análise de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AntiFraudAnalysisStatus</td>
+<td>String</td>
+<td>Status da análise de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AntiFraudServiceName</td>
+<td>String</td>
+<td>Nome do serviço de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Message</td>
+<td>String</td>
+<td>Mensagem de retorno do serviço de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ReturnCode</td>
+<td>String</td>
+<td>Código de retorno do serviço de antifraude</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ReturnStatus</td>
+<td>String</td>
+<td>Status de retorno do serviço de antifraude</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='payment'>Payment</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>BoletoTransactionCollection</td>
+<td>Coleção</td>
+<td>Lista de <a href="#boletotransaction">BoletoTransaction</a> de transações de boleto bancário</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>CreditCardTransactionCollection</td>
+<td>Coleção</td>
+<td>Lista de transações de cartão de crédito</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='boletotransaction'>BoletoTransaction</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AmountInCents</td>
+<td>Int</td>
+<td>Valor total da transação em centavos</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BoletoTransactionKey</td>
+<td>Guid</td>
+<td>Chave da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BoletoTransactionStatus</td>
+<td>String</td>
+<td>Status da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CreateDate</td>
+<td>Data</td>
+<td>Data de criação da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>GatewayTransactionKey</td>
+<td>Guid</td>
+<td>Chave da transação no Gateway</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BankPaymentDate</td>
+<td>Data</td>
+<td>Data de bagamento do boleto</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>PaidAmountInCents</td>
+<td>Int</td>
+<td>Valor total pago</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>PaymentDate</td>
+<td>Data</td>
+<td>Data de pagamento do boleto</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Boleto</td>
+<td><a href="#boleto">Boleto</a></td>
+<td>Detalhes do boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>TransactionDetails</td>
+<td><a href="#transactiondetails">TransactionDetails</a></td>
+<td>Detalhes da transação</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='boleto'>Boleto</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>CreateDate</td>
+<td>Data</td>
+<td>Data de criação do boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ExpirationDate</td>
+<td>Data</td>
+<td>Data de expiração do boleto</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentNumber</td>
+<td>String</td>
+<td>Identificador do para o banco</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>NossoNumero</td>
+<td>String</td>
+<td>Identificador do boleto</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='transactiondetails'>TransactionDetails</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>BankPaymentDate</td>
+<td>Data</td>
+<td>Data de pagamento do boleto bancário no banco</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>PaidAmountInCents</td>
+<td>Int</td>
+<td>Valor total pago</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>PaymentDate</td>
+<td>Data</td>
+<td>Data de pagamento do boleto bancário</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='creditcardtransaction'>CreditCardTransaction</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AmountInCents</td>
+<td>Int</td>
+<td>Valor total da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CreateDate</td>
+<td>Data</td>
+<td>Data de criação da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CreditCardTransactionKey</td>
+<td>Guid</td>
+<td>Chave da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CreditCardTransactionStatus</td>
+<td>String</td>
+<td>Status da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>GatewayTransactionKey</td>
+<td>Guid</td>
+<td>Chave da transação no Gateway de pagamento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Installments</td>
+<td>Int</td>
+<td>Total de pacelas de pagamento</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>CreditCard</td>
+<td><a href="#creditcard">CreditCard</a></td>
+<td>Cartão de crédito</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>TransactionDetails</td>
+<td>[TransactionDetails(#transactiondetails)</td>
+<td>Detalhes da transação</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='creditcard'>CreditCard</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Brand</td>
+<td>String</td>
+<td>Bandeira de cartão de crédito</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>HolderName</td>
+<td>String</td>
+<td>Nome do titular</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>InstantBuyKey</td>
+<td>Guid</td>
+<td>Chave de identificação do cartão de crédito</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>MaskedNumber</td>
+<td>String</td>
+<td>Número do cartão de crédito com aplicação de máscara para ocultar parte da informação</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='transactiondetails'>TransactionDetails</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>Authorization</td>
+<td><a href="#authorization">Authorization</a></td>
+<td>Dados de autorização</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Cancellation</td>
+<td><a href="#cancellation">Cancellation</a></td>
+<td>Dados de cancelamento</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Confirmation</td>
+<td><a href="#confirmation">Confirmation</a></td>
+<td>Dados de caonfirmação</td>
+<td>Não</td>
+</tr>
+</tbody></table>
+<h4 id='authorization'>Authorization</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AcquirerAuthorizationCode</td>
+<td>String</td>
+<td>Código de autorização da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerReturnCode</td>
+<td>String</td>
+<td>Código de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerReturnMessage</td>
+<td>String</td>
+<td>Mensagem de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerTransactionIdentifier</td>
+<td>String</td>
+<td>Identificador da transação na adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerUniqueSequentialNumber</td>
+<td>String</td>
+<td>Identificador único da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AuthorizationDate</td>
+<td>Data</td>
+<td>Data de autorização</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AuthorizedAmountInCents</td>
+<td>Int</td>
+<td>Valor total autorizado</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='cancellation'>Cancellation</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AcquirerReturnCode</td>
+<td>String</td>
+<td>Código de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerReturnMessage</td>
+<td>String</td>
+<td>Mensagem de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerTransactionIdentifier</td>
+<td>String</td>
+<td>Identificador da transação na adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerUniqueSequentialNumber</td>
+<td>String</td>
+<td>Identificador único da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CancellationDate</td>
+<td>Data</td>
+<td>Data de cancelamento</td>
+<td>String</td>
+</tr>
+<tr>
+<td>CanceledAmountInCents</td>
+<td>Int</td>
+<td>Valor total cancelado</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='confirmation'>Confirmation</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AcquirerReturnCode</td>
+<td>String</td>
+<td>Código de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerReturnMessage</td>
+<td>String</td>
+<td>Mensagem de retorno da adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerTransactionIdentifier</td>
+<td>String</td>
+<td>Identificador da transação na adquirente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AcquirerUniqueSequentialNumber</td>
+<td>String</td>
+<td>Identificador único da transação</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CaptureDate</td>
+<td>Data</td>
+<td>Data de captura</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>CapturedAmountInCents</td>
+<td>Int</td>
+<td>Valor total capturado</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='token'>Token</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>TokenKey</td>
+<td>String</td>
+<td>Token do pedido</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>TokenStatus</td>
+<td>String</td>
+<td>Status do Token</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='buyer'>Buyer</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>BirthDate</td>
+<td>Data</td>
+<td>Data de nascimento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BuyerKey</td>
+<td>Guid</td>
+<td>Chave do comprador</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>BuyerReference</td>
+<td>String</td>
+<td>Referência do comprador no sistema da loja do cliente</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentNumber</td>
+<td>String</td>
+<td>Número do documento</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>DocumentType</td>
+<td>String</td>
+<td>Tipo do documento (<strong>CPF</strong> para pessoa física e <strong>CNPJ</strong> para pessoa jurídica)</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>String</td>
+<td>E-mail do comprador</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Gender</td>
+<td>String</td>
+<td>Sexo (<strong>M</strong> para masculino e <strong>F</strong> para feminino)</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>String</td>
+<td>Nome</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>PersonType</td>
+<td>String</td>
+<td>Tipo de pessoa (<strong>person</strong> para pessoa física e <strong>company</strong> para pessoa jurídica)</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Phone</td>
+<td>String</td>
+<td>Número do telefone</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>AddressCollection</td>
+<td>Coleção</td>
+<td>Lista de <a href="#address">Address</a> de endereços do comprador</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+<h4 id='address'>Address</h4>
+<table><thead>
+<tr>
+<th>Campo</th>
+<th>Tipo</th>
+<th>Descrição</th>
+<th>Obrigatório</th>
+</tr>
+</thead><tbody>
+<tr>
+<td>AddressType</td>
+<td>String</td>
+<td>Tipo do endereço (<strong>Billing</strong> para endereço de cobrança, <strong>Shipping</strong> para endereço de entrega, <strong>Residential</strong> para endereço residencial e <strong>Comercial</strong> para endereço comercial.</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>City</td>
+<td>String</td>
+<td>Cidade</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Complement</td>
+<td>String</td>
+<td>Complemento</td>
+<td>Não</td>
+</tr>
+<tr>
+<td>Country</td>
+<td>String</td>
+<td>País</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>District</td>
+<td>String</td>
+<td>Bairro</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Number</td>
+<td>String</td>
+<td>Número</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>State</td>
+<td>String</td>
+<td>Estado</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>Street</td>
+<td>String</td>
+<td>Logradouro</td>
+<td>Sim</td>
+</tr>
+<tr>
+<td>ZipCode</td>
+<td>String</td>
+<td>CEP</td>
+<td>Sim</td>
+</tr>
+</tbody></table>
+
+      </div>
+      <div class="dark-box">
+      </div>
+    </div>
+  </body>
+</html>
